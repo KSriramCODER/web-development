@@ -1,0 +1,111 @@
+import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+
+const hexCircuits = ["outer", "middle", "inner"];
+const totalNodes = 18; // 6 nodes per circuit
+const edgeWeights = {
+  outer: 1,
+  middle: 2,
+  inner: 3,
+};
+
+const initialNodes = Array.from({ length: totalNodes }, (_, i) => ({
+  id: i,
+  owner: null, // "Red" | "Blue"
+}));
+
+const edges = [
+  // Each circuit is a ring
+  ...[...Array(3)].flatMap((_, circuit) =>
+    [...Array(6)].map((_, i) => {
+      const base = circuit * 6;
+      return {
+        from: base + i,
+        to: base + (i + 1) % 6 + base,
+        weight: edgeWeights[hexCircuits[circuit]],
+      };
+    })
+  ),
+];
+
+export default function TitanCircuit() {
+  const [nodes, setNodes] = useState(initialNodes);
+  const [currentPlayer, setCurrentPlayer] = useState("Red");
+  const [placedTitans, setPlacedTitans] = useState({ Red: 0, Blue: 0 });
+  const [scores, setScores] = useState({ Red: 0, Blue: 0 });
+  const [timer, setTimer] = useState(60); // 60s total per player
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimer((t) => Math.max(0, t - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handlePlaceTitan = (id: number) => {
+    const circuitIndex = Math.floor(id / 6);
+    const circuit = hexCircuits[circuitIndex];
+    if (nodes[id].owner || placedTitans[currentPlayer] >= 4) return;
+    // Can only place on current unlocked circuit
+    if (
+      (circuit === "outer" && placedTitans[currentPlayer] < 4) ||
+      (circuit === "middle" && placedTitans[currentPlayer] >= 4 &&
+        nodes.slice(0, 6).every((n) => n.owner))
+    ) {
+      const newNodes = [...nodes];
+      newNodes[id].owner = currentPlayer;
+      setNodes(newNodes);
+      const updatedPlaced = {
+        ...placedTitans,
+        [currentPlayer]: placedTitans[currentPlayer] + 1,
+      };
+      setPlacedTitans(updatedPlaced);
+      updateScores(newNodes);
+      setCurrentPlayer(currentPlayer === "Red" ? "Blue" : "Red");
+    }
+  };
+
+  const updateScores = (updatedNodes: typeof nodes) => {
+    let newScores = { Red: 0, Blue: 0 };
+    edges.forEach((edge) => {
+      const fromOwner = updatedNodes[edge.from].owner;
+      const toOwner = updatedNodes[edge.to].owner;
+      if (fromOwner && fromOwner === toOwner) {
+        newScores[fromOwner] += edge.weight;
+      }
+    });
+    setScores(newScores);
+  };
+
+  return (
+    <div className="p-4 max-w-xl mx-auto text-center">
+      <h1 className="text-2xl font-bold mb-4">Titan's Circuit</h1>
+      <p>Current Turn: <span className={`font-semibold text-${currentPlayer === "Red" ? "red" : "blue"}-500`}>{currentPlayer}</span></p>
+      <p className="mb-2">Time Left: {timer}s</p>
+      <div className="grid grid-cols-6 gap-2 my-4">
+        {nodes.map((node) => (
+          <button
+            key={node.id}
+            onClick={() => handlePlaceTitan(node.id)}
+            className={`w-12 h-12 rounded-full border-2 ${
+              node.owner === "Red"
+                ? "bg-red-500"
+                : node.owner === "Blue"
+                ? "bg-blue-500"
+                : "bg-white"
+            }`}
+          >
+            {node.id}
+          </button>
+        ))}
+      </div>
+      <div className="mt-4">
+        <p className="text-lg font-semibold text-red-500">Red Score: {scores.Red}</p>
+        <p className="text-lg font-semibold text-blue-500">Blue Score: {scores.Blue}</p>
+      </div>
+      <div className="mt-4">
+        <Button onClick={() => window.location.reload()}>Reset</Button>
+      </div>
+    </div>
+  );
+}
